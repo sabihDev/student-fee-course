@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import dynamic from 'next/dynamic';
 
@@ -5,11 +7,5 @@ import dynamic from 'next/dynamic';
 const AppClient = dynamic(() => import('../src/App'), { ssr: false });
 
 export default function Page() {
-  return (
-    <html>
-      <body>
-        <AppClient />
-      </body>
-    </html>
-  );
+  return <AppClient />;
 }

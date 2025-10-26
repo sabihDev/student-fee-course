@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Select from 'react-select';
-import { IStudent, Month, Class, months, classes, ApiResponse } from './types';
+import { IStudent, Month, Class, months, classes } from './types';
 import StudentForm from './components/StudentForm';
 import FeeManagement from './components/FeeManagement';
 import { toast, ToastContainer } from 'react-toastify';
@@ -9,10 +9,6 @@ import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api';
-
-interface StudentsByClass {
-  [key: string]: IStudent[];
-}
 
 type SortField = 'name' | 'class' | 'feeStatus';
 type ViewMode = 'class' | 'month';

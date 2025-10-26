@@ -18,7 +18,16 @@ echo "Building backend..."
 npm run build
 
 echo "Starting backend service..."
-pm2 delete student-fee-backend || true
+# Check if PM2 is installed
+if ! command -v pm2 &> /dev/null; then
+    echo -e "${RED}PM2 is not installed. Installing PM2...${NC}"
+    npm install -g pm2
+fi
+
+# Stop existing PM2 process if running
+pm2 delete student-fee-backend 2>/dev/null || true
+
+# Start backend with PM2
 pm2 start dist/index.js --name student-fee-backend
 
 # Frontend deployment

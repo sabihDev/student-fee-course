@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '../../../src/server/db/mongoose';
 import { Student } from '../../../src/server/models/Student';
+import { FeeRecord } from '../../../src/server/models/FeeRecord';
 
 export async function GET(req: Request) {
   await connectToDatabase();

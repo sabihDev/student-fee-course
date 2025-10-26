@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 
-const MONGO_URI = process.env.MONGO_URI || process.env.NEXT_PUBLIC_MONGO_URI;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!MONGO_URI) {
-  console.warn('MONGO_URI not set. Please set MONGO_URI environment variable.');
+if (!MONGODB_URI) {
+  console.warn('MONGODB_URI not set. Please set MONGODB_URI environment variable.');
 }
 
 interface Cached {
@@ -19,7 +19,7 @@ export async function connectToDatabase() {
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGO_URI!, { maxPoolSize: 10 }).then((mongoose) => {
+    cached.promise = mongoose.connect(MONGODB_URI!, { maxPoolSize: 10 }).then((mongoose) => {
       return mongoose;
     });
   }

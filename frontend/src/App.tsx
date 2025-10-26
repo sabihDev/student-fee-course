@@ -8,23 +8,27 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api';
 
 interface StudentsByClass {
   [key: string]: IStudent[];
 }
 
+type SortField = 'name' | 'class' | 'feeStatus';
+type ViewMode = 'class' | 'month';
+type FeeStatus = 'paid' | 'unpaid';
+
 const App: React.FC = () => {
-  const [students, setStudents] = useState<StudentsByClass | IStudent[]>([]);
-  const [selectedClass, setSelectedClass] = useState<string | null>(null);
-  const [selectedFeeStatus, setSelectedFeeStatus] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [students, setStudents] = useState<IStudent[]>([]);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [selectedFeeStatus, setSelectedFeeStatus] = useState<FeeStatus | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<Month | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<IStudent | null>(null);
-  const [viewMode, setViewMode] = useState<'class' | 'month'>('class');
+  const [viewMode, setViewMode] = useState<ViewMode>('class');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,11 +46,16 @@ const App: React.FC = () => {
         params.append('sortOrder', sortOrder);
       }
 
-      const { data } = await axios.get<ApiResponse<IStudent[]>>(`${API_URL}/students?${params.toString()}`);
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to fetch students');
+      const resp = await axios.get(`${API_URL}/students?${params.toString()}`);
+      const respData = resp.data;
+      // backend may return either an array of students or an ApiResponse wrapper
+      if (Array.isArray(respData)) {
+        setStudents(respData as IStudent[]);
+      } else if (respData && respData.success === true) {
+        setStudents(respData.data || []);
+      } else {
+        throw new Error((respData && respData.message) || 'Failed to fetch students');
       }
-      setStudents(data.data || []);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An error occurred while fetching students';
       setError(errorMessage);
@@ -65,9 +74,10 @@ const App: React.FC = () => {
       const params = new URLSearchParams();
       if (selectedMonth) params.append('month', selectedMonth);
       if (selectedYear) params.append('year', selectedYear.toString());
+      if (type !== 'all') params.append('feeStatus', type);
 
       const response = await axios.get(
-        `${API_URL}/students/download/${type}?${params.toString()}`,
+        `${API_URL}/students/export/csv?${params.toString()}`,
         { responseType: 'blob' }
       );
       
@@ -83,13 +93,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteStudent = async (id: string) => {
+  const handleDeleteStudent = async (id?: string) => {
+    if (!id) return;
+    
     try {
-      const { data } = await axios.delete<ApiResponse<void>>(`${API_URL}/students/${id}`);
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to delete student');
+      const resp = await axios.delete(`${API_URL}/students/${id}`);
+      // treat 2xx as success; backend may return a message or ApiResponse
+      if (resp.status >= 200 && resp.status < 300) {
+        toast.success('Student deleted successfully');
+      } else {
+        const respData = resp.data;
+        throw new Error((respData && respData.message) || 'Failed to delete student');
       }
-      toast.success('Student deleted successfully');
       fetchStudents();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error deleting student';
@@ -99,13 +114,13 @@ const App: React.FC = () => {
 
   const classOptions = classes.map(c => ({ value: c, label: c }));
   const feeStatusOptions = [
-    { value: 'paid', label: 'Paid' },
-    { value: 'unpaid', label: 'Unpaid' }
+    { value: 'paid' as FeeStatus, label: 'Paid' },
+    { value: 'unpaid' as FeeStatus, label: 'Unpaid' }
   ];
   const sortOptions = [
-    { value: 'name', label: 'Name' },
-    { value: 'class', label: 'Class' },
-    { value: 'feeStatus', label: 'Fee Status' }
+    { value: 'name' as SortField, label: 'Name' },
+    { value: 'class' as SortField, label: 'Class' },
+    { value: 'feeStatus' as SortField, label: 'Fee Status' }
   ];
   const monthOptions = months.map(m => ({ value: m, label: m }));
   const yearOptions = Array.from(
@@ -198,6 +213,7 @@ const App: React.FC = () => {
               isClearable
               options={classOptions}
               onChange={(option) => setSelectedClass(option?.value ?? null)}
+              value={selectedClass ? { value: selectedClass, label: selectedClass } : null}
             />
           </div>
         ) : (
@@ -208,6 +224,7 @@ const App: React.FC = () => {
                 isClearable
                 options={monthOptions}
                 onChange={(option) => setSelectedMonth(option?.value ?? null)}
+                value={selectedMonth ? { value: selectedMonth, label: selectedMonth } : null}
               />
             </div>
             <div className="filter-item">
@@ -216,6 +233,7 @@ const App: React.FC = () => {
                 options={yearOptions}
                 onChange={(option) => option && setSelectedYear(option.value)}
                 value={yearOptions.find(y => y.value === selectedYear)}
+                className="form-select"
               />
             </div>
           </>
@@ -227,6 +245,10 @@ const App: React.FC = () => {
             isClearable
             options={feeStatusOptions}
             onChange={(option) => setSelectedFeeStatus(option?.value ?? null)}
+            value={selectedFeeStatus ? {
+              value: selectedFeeStatus,
+              label: selectedFeeStatus.charAt(0).toUpperCase() + selectedFeeStatus.slice(1)
+            } : null}
           />
         </div>
         
@@ -236,6 +258,10 @@ const App: React.FC = () => {
             isClearable
             options={sortOptions}
             onChange={(option) => setSortBy(option?.value ?? null)}
+            value={sortBy ? {
+              value: sortBy,
+              label: sortOptions.find(opt => opt.value === sortBy)?.label ?? sortBy
+            } : null}
           />
         </div>
         
@@ -244,6 +270,7 @@ const App: React.FC = () => {
           <select
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+            className="form-select"
           >
             <option value="asc">Ascending</option>
             <option value="desc">Descending</option>
@@ -264,19 +291,14 @@ const App: React.FC = () => {
       </div>
 
       <div className="students-container">
-        {viewMode === 'class' && !selectedClass ? (
-          // Handle grouped by class view
-          !Array.isArray(students) ? (
-            Object.entries(students).map(([className, classStudents]) => (
-              <div key={className} className="class-group">
-                <h2>{className}</h2>
-                {Array.isArray(classStudents) && renderStudentTable(classStudents)}
-              </div>
-            ))
-          ) : null
+        {isLoading ? (
+          <div className="loading-container">
+            <div className="spinner-border" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
         ) : (
-          // Handle flat list view
-          renderStudentTable(Array.isArray(students) ? students : undefined)
+          renderStudentTable(students)
         )}
       </div>
 

@@ -167,7 +167,18 @@ export const getStudentFeeHistory = async (req: Request, res: Response) => {
 
 export const exportStudentsToCSV = async (req: Request, res: Response) => {
     try {
-        const students = await Student.find().populate('feeRecords');
+        const { month, year, feeStatus } = req.query;
+        
+        const query: any = {};
+        if (feeStatus) query.feeStatus = feeStatus;
+        
+        const students = await Student.find(query).populate({
+            path: 'feeRecords',
+            match: month && year ? {
+                month: month,
+                year: parseInt(year as string)
+            } : {}
+        });
         
         const data = students.map(student => {
             const feeRecords = student.feeRecords || [];
@@ -216,17 +227,41 @@ export const recordFeePayment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         if (!isValidObjectId(id)) {
-            return res.status(400).json({ message: 'Invalid student ID' });
+            return res.status(400).json({ success: false, message: 'Invalid student ID' });
         }
 
-        const { month, year, amount } = req.body;
-        if (!month || !year || !amount) {
-            return res.status(400).json({ message: 'Month, year, and amount are required' });
+        const { month, year, amount, feeStatus, feeId } = req.body;
+        
+        // Update existing fee record
+        if (feeId) {
+            if (!isValidObjectId(feeId)) {
+                return res.status(400).json({ success: false, message: 'Invalid fee record ID' });
+            }
+
+            const feeRecord = await FeeRecord.findById(feeId);
+            if (!feeRecord) {
+                return res.status(404).json({ success: false, message: 'Fee record not found' });
+            }
+
+            if (feeRecord.student.toString() !== id) {
+                return res.status(403).json({ success: false, message: 'Fee record does not belong to this student' });
+            }
+
+            feeRecord.status = feeStatus;
+            feeRecord.paidAt = feeStatus === 'paid' ? new Date() : undefined;
+            await feeRecord.save();
+
+            return res.json({ success: true, data: feeRecord });
+        }
+
+        // Create new fee record
+        if (!month || !year || !amount || !feeStatus) {
+            return res.status(400).json({ success: false, message: 'Month, year, amount, and fee status are required for new fee records' });
         }
 
         const student = await Student.findById(id);
         if (!student) {
-            return res.status(404).json({ message: 'Student not found' });
+            return res.status(404).json({ success: false, message: 'Student not found' });
         }
 
         // Create new fee record
@@ -235,8 +270,8 @@ export const recordFeePayment = async (req: Request, res: Response) => {
             month,
             year,
             amount,
-            status: 'paid',
-            paidAt: new Date()
+            status: feeStatus,
+            paidAt: feeStatus === 'paid' ? new Date() : null
         });
 
         // Save fee record and update student status atomically
@@ -246,7 +281,7 @@ export const recordFeePayment = async (req: Request, res: Response) => {
         ]);
 
         await savedFeeRecord.populate('student');
-        res.json(savedFeeRecord);
+        res.json({ success: true, data: savedFeeRecord });
     } catch (error) {
         console.error('Error recording fee payment:', error);
         res.status(500).json({ message: 'Error recording fee payment', error: error instanceof Error ? error.message : String(error) });
